@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.16;
+pragma solidity ^0.8.16;
 
 import { Votes } from "../Votes.sol";
 import { AuctionTypesV1 } from "../types/AuctionTypesV1.sol";

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.16;
+pragma solidity ^0.8.16;
 
 /// @title IAuction
 /// @author Adam Stallard
@@ -64,11 +64,14 @@ interface IAuction {
     /// @dev Reverts if a bid is placed for the wrong token
     error INVALID_TOKEN_ID();
 
-    /// @dev Reverts if a bid is placed for an auction thats over
+    /// @dev Reverts if a bid is placed for an auction that's over
     error AUCTION_OVER();
 
-    /// @dev Reverts if a bid is placed for an auction that hasn't started
+    /// @dev Reverts if a bid is placed or an attempt to settle is made for an auction that hasn't started
     error AUCTION_NOT_STARTED();
+
+    /// @dev Reverts if attempting to start an auction early if its start date is already passed
+    error AUCTION_START_NOT_IN_FUTURE();
 
     /// @dev Reverts if attempting to settle an active auction
     error AUCTION_ACTIVE();
@@ -97,66 +100,4 @@ interface IAuction {
     /// @dev Thrown if the auction creation failed
     error AUCTION_CREATE_FAILED_TO_LAUNCH();
 
-    ///                                                          ///
-    ///                          FUNCTIONS                       ///
-    ///                                                          ///
-
-    /// @notice Creates a bid for the current token
-    /// @param tokenId The ERC-721 token id
-    function createBid(uint256 tokenId) external payable;
-
-    /// @notice Settles the current auction and creates the next one
-    function settleCurrentAndCreateNewAuction() external;
-
-    /// @notice Settles the latest auction when the contract is paused
-    function settleAuction() external;
-
-    /// @notice Pauses the auction house
-    function pause() external;
-
-    /// @notice Unpauses the auction house
-    function unpause() external;
-
-    /// @notice The time duration of each auction
-    function duration() external view returns (uint256);
-
-    /// @notice The reserve price of each auction
-    function reservePrice() external view returns (uint256);
-
-    /// @notice The minimum amount of time to place a bid during an active auction
-    function timeBuffer() external view returns (uint256);
-
-    /// @notice The minimum percentage an incoming bid must raise the highest bid
-    function minBidIncrement() external view returns (uint256);
-
-    /// @notice Updates the time duration of each auction
-    /// @param duration The new time duration
-    function setDuration(uint256 duration) external;
-
-    /// @notice Updates the reserve price of each auction
-    /// @param reservePrice The new reserve price
-    function setReservePrice(uint256 reservePrice) external;
-
-    /// @notice Sets the address where the auctioned token is sent if the reserve isn't met
-    /// @param reserveAddress The new reserve address
-    function setReserveAddress(address reserveAddress) public;
-
-    /// @notice Sets the address where every tenth token is sent to be raffled
-    /// @param raffleAddress The new raffle address
-    function setRaffleAddress(address raffleAddress) public;
-
-    /// @notice Sets the address where auction income is sent
-    /// @param treasuryAddress The new treasury address
-    function setTreasuryAddress(address treasuryAddress) public;
-
-    /// @notice Updates the time buffer of each auction
-    /// @param timeBuffer The new time buffer
-    function setTimeBuffer(uint256 timeBuffer) external;
-
-    /// @notice Updates the minimum bid increment of each subsequent bid
-    /// @param percentage The new percentage
-    function setMinimumBidIncrement(uint256 percentage) external;
-
-    /// @notice Get the address of the treasury
-    function treasury() external returns (address);
 }

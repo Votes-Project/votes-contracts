@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.16;
+pragma solidity ^0.8.16;
 
 import "@openzeppelin/contracts/security/Pausable.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 import { AuctionStorageV1 } from "./storage/AuctionStorageV1.sol";
-import { Votes } from ".Votes.sol";
+import { Votes } from "./Votes.sol";
 import { IAuction } from "./lib/interfaces/IAuction.sol";
 import { IWETH } from "./lib/interfaces/IWETH.sol";
 
@@ -18,7 +18,10 @@ import { IWETH } from "./lib/interfaces/IWETH.sol";
 /// - github.com/ourzora/nouns-protocol commit 7299b0c6d00d4c6da066f9160120be268880b10d - MIT license.
 /// - NounsAuctionHouse.sol commit 2cbe6c7 - licensed under the BSD-3-Clause license.
 /// - Zora V3 ReserveAuctionCoreEth module commit 795aeca - licensed under the GPL-3.0 license.
-contract Auction is IAuction, Ownable, ReentrancyGuard, Pausable, AuctionStorageV1 {
+contract Auction is IAuction, AccessControl, ReentrancyGuard, Pausable, AuctionStorageV1 {
+
+    bytes32 public constant UPDATE_METADATA_ROLE = keccak256("UPDATE_METADATA_ROLE");
+
     ///                                                          ///
     ///                          IMMUTABLES                      ///
     ///                                                          ///
@@ -46,23 +49,30 @@ contract Auction is IAuction, Ownable, ReentrancyGuard, Pausable, AuctionStorage
         address _votes,
         address _treasury,
         uint256 _duration,
-        uint256 _reservePrice
+        uint256 _reservePrice,
+        string memory _votesURI,
+        string memory _flashVotesURI
     ) payable {
         WETH = _weth;
+
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(UPDATE_METADATA_ROLE, msg.sender);
 
         // Pause the contract until the first auction
         _pause();
 
         // Store the Votes token
-        votes = Votes(_votes);
+        votesToken = Votes(_votes);
 
         // Store the auction house settings
         settings.duration = SafeCast.toUint40(_duration);
         settings.reservePrice = _reservePrice;
         settings.timeBuffer = INITIAL_TIME_BUFFER;
         settings.minBidIncrement = INITIAL_MIN_BID_INCREMENT_PERCENT;
+        settings.votesURI = _votesURI;
+        settings.flashVotesURI = _flashVotesURI;
 
-        // Set the reserve, raffle, and treasury addresses to the supplied treasury address.
+        // Set the reserve, raffle, and treasury addresses to the treasury address for now.
         settings.treasury = _treasury;
         settings.reserveAddress = _treasury;
         settings.raffleAddress = _treasury;
@@ -78,6 +88,10 @@ contract Auction is IAuction, Ownable, ReentrancyGuard, Pausable, AuctionStorage
         // Ensure the bid is for the current token
         if (auction.tokenId != _tokenId) {
             revert INVALID_TOKEN_ID();
+        }
+
+        if (block.timestamp < auction.startTime){
+            revert AUCTION_NOT_STARTED();
         }
 
         // Ensure the auction is still active
@@ -168,7 +182,7 @@ contract Auction is IAuction, Ownable, ReentrancyGuard, Pausable, AuctionStorage
         if (auction.settled) revert AUCTION_SETTLED();
 
         // Ensure the auction had started
-        if (_auction.startTime == 0) revert AUCTION_NOT_STARTED();
+        if (_auction.startTime == 0 || _auction.startTime > block.timestamp) revert AUCTION_NOT_STARTED();
 
         // Ensure the auction is over
         if (block.timestamp < _auction.endTime) revert AUCTION_ACTIVE();
@@ -181,16 +195,16 @@ contract Auction is IAuction, Ownable, ReentrancyGuard, Pausable, AuctionStorage
             // Cache the amount of the highest bid
             uint256 highestBid = _auction.highestBid;
 
-            // If the highest bid included ETH: Transfer it to the DAO treasury
+            // If the highest bid included ETH: Transfer it to the treasury
             if (highestBid != 0) _handleOutgoingTransfer(settings.treasury, highestBid);
 
             // Transfer the token to the highest bidder
-            token.transferFrom(address(this), _auction.highestBidder, _auction.tokenId);
+            votesToken.transferFrom(address(this), _auction.highestBidder, _auction.tokenId);
 
             // Else no bid was placed:
         } else {
-            // Burn the token
-            token.burn(_auction.tokenId);
+            // Transfer the token to the reserve address
+            votesToken.transferFrom(address(this), settings.reserveAddress, _auction.tokenId);
         }
 
         emit AuctionSettled(_auction.tokenId, _auction.highestBidder, _auction.highestBid);
@@ -198,23 +212,46 @@ contract Auction is IAuction, Ownable, ReentrancyGuard, Pausable, AuctionStorage
 
     /// @dev Creates an auction for the next token
     function _createAuction() private returns (bool) {
+        uint256 nextTokenId = votesToken.totalSupply();
+
+        uint lastDigit = nextTokenId % 10;
+
+        // Every token with a tokenId ending in `9` is raffled
+        bool isRaffle = lastDigit == 9;
+
+        // Cache the current timestamp
+        uint256 startTime = block.timestamp;
+
+        if (isRaffle) {
+            try votesToken.mint(settings.raffleAddress, settings.votesURI) {
+                // set nextTokenId for next auction
+                nextTokenId = votesToken.totalSupply();
+                // Since there is no auction during a raffle, make the next auction start one duration later
+                startTime += settings.duration;
+            } catch {
+                // Pause the contract if token minting failed
+                _pause();
+                return false;
+            }
+        }
+
+        // Used to store the auction end time
+        uint256 endTime;
+
+        // Tokens with a tokenId ending in `0` or `5` are "Flash Votes tokens"
+        bool isFlash = (lastDigit == 0 || lastDigit == 5);
+        string memory uri = isFlash ? settings.flashVotesURI : settings.votesURI;
+
         // Get the next token available for bidding
-        try votes.mint() returns (uint256 tokenId) {
+        try votesToken.mint(uri) {
             // Store the token id
-            auction.tokenId = tokenId;
-
-            // Cache the current timestamp
-            uint256 startTime = block.timestamp;
-
-            // Used to store the auction end time
-            uint256 endTime;
+            auction.tokenId = nextTokenId;
 
             // Cannot realistically overflow
         unchecked {
             // Compute the auction end time
             endTime = startTime + settings.duration;
         }
-
             // Store the auction start and end time
             auction.startTime = uint40(startTime);
             auction.endTime = uint40(endTime);
@@ -224,7 +261,7 @@ contract Auction is IAuction, Ownable, ReentrancyGuard, Pausable, AuctionStorage
             auction.highestBidder = address(0);
             auction.settled = false;
 
-            emit AuctionCreated(tokenId, startTime, endTime);
+            emit AuctionCreated(nextTokenId, startTime, endTime);
             return true;
         } catch {
             // Pause the contract if token minting failed
@@ -233,12 +270,33 @@ contract Auction is IAuction, Ownable, ReentrancyGuard, Pausable, AuctionStorage
         }
     }
 
+    /// @notice Start an auction set in the future now.
+    function startAuctionEarly() public onlyRole(DEFAULT_ADMIN_ROLE) {
+        // Cache the current timestamp
+        uint256 newStartTime = block.timestamp;
+
+        if (auction.startTime < newStartTime) {
+            revert AUCTION_START_NOT_IN_FUTURE();
+        }
+
+        // Used to store the auction end time
+        uint256 endTime;
+
+        unchecked {
+        // Compute the auction end time
+            endTime = newStartTime + settings.duration;
+        }
+
+        auction.startTime = uint40(newStartTime);
+        auction.endTime = uint40(endTime);
+    }
+
     ///                                                          ///
     ///                             PAUSE                        ///
     ///                                                          ///
 
     /// @notice Unpauses the auction house
-    function unpause() external onlyOwner {
+    function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
         _unpause();
 
         // If this is the first auction:
@@ -260,7 +318,7 @@ contract Auction is IAuction, Ownable, ReentrancyGuard, Pausable, AuctionStorage
     }
 
     /// @notice Pauses the auction house
-    function pause() external onlyOwner {
+    function pause() external onlyRole(DEFAULT_ADMIN_ROLE) {
         _pause();
     }
 
@@ -272,6 +330,8 @@ contract Auction is IAuction, Ownable, ReentrancyGuard, Pausable, AuctionStorage
     ///                                                          ///
     ///                       AUCTION SETTINGS                   ///
     ///                                                          ///
+
+    // The settings object is public, so these can also be retrieved by its getter
 
     /// @notice The DAO treasury
     function treasury() external view returns (address) {
@@ -304,7 +364,7 @@ contract Auction is IAuction, Ownable, ReentrancyGuard, Pausable, AuctionStorage
 
     /// @notice Updates the time duration of each auction
     /// @param _duration The new time duration
-    function setDuration(uint256 _duration) public onlyOwner whenPaused {
+    function setDuration(uint256 _duration) public onlyRole(DEFAULT_ADMIN_ROLE) whenPaused {
         settings.duration = SafeCast.toUint40(_duration);
 
         emit DurationUpdated(_duration);
@@ -312,7 +372,7 @@ contract Auction is IAuction, Ownable, ReentrancyGuard, Pausable, AuctionStorage
 
     /// @notice Updates the reserve price of each auction
     /// @param _reservePrice The new reserve price
-    function setReservePrice(uint256 _reservePrice) public onlyOwner whenPaused {
+    function setReservePrice(uint256 _reservePrice) public onlyRole(DEFAULT_ADMIN_ROLE) whenPaused {
         settings.reservePrice = _reservePrice;
 
         emit ReservePriceUpdated(_reservePrice);
@@ -320,7 +380,7 @@ contract Auction is IAuction, Ownable, ReentrancyGuard, Pausable, AuctionStorage
 
     /// @notice Sets the address where the auctioned token is sent if the reserve isn't met
     /// @param reserveAddress The new reserve address
-    function setReserveAddress(address reserveAddress) public onlyOwner {
+    function setReserveAddress(address reserveAddress) public onlyRole(DEFAULT_ADMIN_ROLE) {
         settings.reserveAddress = reserveAddress;
 
         emit ReserveAddressUpdated(reserveAddress);
@@ -328,23 +388,23 @@ contract Auction is IAuction, Ownable, ReentrancyGuard, Pausable, AuctionStorage
 
     /// @notice Sets the address where every tenth token is sent to be raffled
     /// @param raffleAddress The new raffle address
-    function setRaffleAddress(address raffleAddress) public onlyOwner {
+    function setRaffleAddress(address raffleAddress) public onlyRole(DEFAULT_ADMIN_ROLE) {
         settings.raffleAddress = raffleAddress;
 
         emit RaffleAddressUpdated(raffleAddress);
     }
 
     /// @notice Sets the address where auction income is sent
-    /// @param treasuryAddress The new treasury address
-    function setTreasuryAddress(address treasuryAddress) public onlyOwner {
-        settings.treasuryAddress = treasuryAddress;
+    /// @param _treasury The new treasury address
+    function setTreasuryAddress(address _treasury) public onlyRole(DEFAULT_ADMIN_ROLE) {
+        settings.treasury = _treasury;
 
-        emit TreasuryAddressUpdated(treasuryAddress);
+        emit TreasuryAddressUpdated(_treasury);
     }
 
     /// @notice Updates the time buffer of each auction
     /// @param _timeBuffer The new time buffer
-    function setTimeBuffer(uint256 _timeBuffer) public onlyOwner whenPaused {
+    function setTimeBuffer(uint256 _timeBuffer) public onlyRole(DEFAULT_ADMIN_ROLE) whenPaused {
         settings.timeBuffer = SafeCast.toUint40(_timeBuffer);
 
         emit TimeBufferUpdated(_timeBuffer);
@@ -352,7 +412,7 @@ contract Auction is IAuction, Ownable, ReentrancyGuard, Pausable, AuctionStorage
 
     /// @notice Updates the minimum bid increment of each subsequent bid
     /// @param _percentage The new percentage
-    function setMinimumBidIncrement(uint256 _percentage) public onlyOwner whenPaused {
+    function setMinimumBidIncrement(uint256 _percentage) public onlyRole(DEFAULT_ADMIN_ROLE) whenPaused {
         if (_percentage == 0) {
             revert MIN_BID_INCREMENT_1_PERCENT();
         }
@@ -360,6 +420,18 @@ contract Auction is IAuction, Ownable, ReentrancyGuard, Pausable, AuctionStorage
         settings.minBidIncrement = SafeCast.toUint8(_percentage);
 
         emit MinBidIncrementPercentageUpdated(_percentage);
+    }
+
+    /// @notice Sets the metadata URI for all newly minted Votes tokens
+    /// @param uri The new URI
+    function setVotesURI(string memory uri) public onlyRole(UPDATE_METADATA_ROLE) {
+        settings.votesURI = uri;
+    }
+
+    /// @notice Sets the metadata URI for all newly minted Flash Votes tokens
+    /// @param uri The new URI
+    function setFlashVotesURI(string memory uri) public onlyRole(UPDATE_METADATA_ROLE) {
+        settings.flashVotesURI = uri;
     }
 
     ///                                                          ///

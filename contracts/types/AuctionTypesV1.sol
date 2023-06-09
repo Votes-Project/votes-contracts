@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.16;
+pragma solidity ^0.8.16;
 
 /// @title AuctionTypesV1
 /// @author Adam Stallard
@@ -14,6 +14,8 @@ contract AuctionTypesV1 {
         uint256 reservePrice;
         address reserveAddress;
         address raffleAddress;
+        string votesURI;
+        string flashVotesURI;
     }
 
     struct Auction {
