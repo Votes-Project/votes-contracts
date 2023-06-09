@@ -199,7 +199,7 @@ contract Auction is IAuction, Ownable, ReentrancyGuard, Pausable, AuctionStorage
     /// @dev Creates an auction for the next token
     function _createAuction() private returns (bool) {
         // Get the next token available for bidding
-        try token.mint() returns (uint256 tokenId) {
+        try votes.mint() returns (uint256 tokenId) {
             // Store the token id
             auction.tokenId = tokenId;
 
@@ -320,7 +320,7 @@ contract Auction is IAuction, Ownable, ReentrancyGuard, Pausable, AuctionStorage
 
     /// @notice Sets the address where the auctioned token is sent if the reserve isn't met
     /// @param reserveAddress The new reserve address
-    function setReserveAddress(address reserveAddress) onlyOwner {
+    function setReserveAddress(address reserveAddress) public onlyOwner {
         settings.reserveAddress = reserveAddress;
 
         emit ReserveAddressUpdated(reserveAddress);
@@ -328,7 +328,7 @@ contract Auction is IAuction, Ownable, ReentrancyGuard, Pausable, AuctionStorage
 
     /// @notice Sets the address where every tenth token is sent to be raffled
     /// @param raffleAddress The new raffle address
-    function setRaffleAddress(address raffleAddress) onlyOwner {
+    function setRaffleAddress(address raffleAddress) public onlyOwner {
         settings.raffleAddress = raffleAddress;
 
         emit RaffleAddressUpdated(raffleAddress);
@@ -336,7 +336,7 @@ contract Auction is IAuction, Ownable, ReentrancyGuard, Pausable, AuctionStorage
 
     /// @notice Sets the address where auction income is sent
     /// @param treasuryAddress The new treasury address
-    function setTreasuryAddress(address treasuryAddress) onlyOwner {
+    function setTreasuryAddress(address treasuryAddress) public onlyOwner {
         settings.treasuryAddress = treasuryAddress;
 
         emit TreasuryAddressUpdated(treasuryAddress);
