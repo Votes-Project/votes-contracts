@@ -1,7 +1,9 @@
-import { deployVotes } from "./deployVotes";
+const deployVotes = require("./deployVotes");
+const deployAuction = require("./deployAuction");
 
 async function main() {
     await deployVotes();
+    await deployAuction();
 }
 
 // We recommend this pattern to be able to use async/await everywhere
