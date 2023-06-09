@@ -1,0 +1,11 @@
+{
+  "name": "votes-contracts",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^2.0.2",
+    "@truffle/dashboard-hardhat-plugin": "^0.2.5",
+    "hardhat": "^2.14.0"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^4.9.1"
+  }
+}
