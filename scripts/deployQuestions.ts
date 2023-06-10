@@ -1,5 +1,6 @@
 import { ethers } from "hardhat";
 import { votes } from "./locations";
+
 const hre = require("hardhat");
 
 async function deploy(votesAddress?: string) {
@@ -13,13 +14,17 @@ async function deploy(votesAddress?: string) {
   await questions.deployed();
 
   console.log(
-      `Questions deployed to ${questions.address}`
+    `Questions deployed to ${questions.address}`
   );
 
-  await hre.run("verify:verify", {
-    address: questions.address,
-    constructorArguments: questionsArgs
-  });
+  try {
+    await hre.run("verify:verify", {
+      address: questions.address,
+      constructorArguments: questionsArgs
+    });
+  } catch (e) {
+    console.error(e);
+  }
 
   return questions.address;
 }

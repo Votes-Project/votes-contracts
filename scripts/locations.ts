@@ -2,7 +2,7 @@
 
 const network = 'goerli';
 
-console.log (`${network} will be used for contract locations.`);
+console.log(`${network} will be used for contract locations.`);
 
 const locations = {
   "WETH": {
@@ -22,4 +22,4 @@ const locations = {
 const weth = locations.WETH[network];
 const votes = locations.Votes[network];
 
-export {  weth, votes };
+export { weth, votes };

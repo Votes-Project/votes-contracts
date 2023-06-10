@@ -1,5 +1,6 @@
 import { ethers } from "hardhat";
 import { weth, votes } from "./locations";
+
 const hre = require("hardhat");
 
 async function deploy(votesAddress?: string) {
@@ -19,14 +20,17 @@ async function deploy(votesAddress?: string) {
   await auction.deployed();
 
   console.log(
-      `Auction deployed to ${auction.address}`
+    `Auction deployed to ${auction.address}`
   );
 
-  await hre.run("verify:verify", {
-    address: auction.address,
-    constructorArguments: auctionArgs
-  });
-
+  try {
+    await hre.run("verify:verify", {
+      address: auction.address,
+      constructorArguments: auctionArgs
+    });
+  } catch (e) {
+    console.error(e);
+  }
   return auction.address;
 }
 

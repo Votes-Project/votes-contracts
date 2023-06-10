@@ -1,4 +1,5 @@
 import { ethers } from "hardhat";
+
 const hre = require("hardhat");
 
 async function deploy() {
@@ -16,8 +17,7 @@ async function deploy() {
     await hre.run("verify:verify", {
       address: votes.address
     });
-  }
-  catch (e) {
+  } catch (e) {
     console.error(e);
   }
 
