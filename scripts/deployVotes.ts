@@ -1,7 +1,7 @@
 import { ethers } from "hardhat";
 const hre = require("hardhat");
 
-async function main() {
+async function deploy() {
 
   const Votes = await ethers.getContractFactory("Votes");
   const votes = await Votes.deploy();
@@ -12,19 +12,25 @@ async function main() {
     `Votes deployed to ${votes.address}`
   );
 
-  await hre.run("verify:verify", {
-    address: votes.address
-  });
-}
+  try {
+    await hre.run("verify:verify", {
+      address: votes.address
+    });
+  }
+  catch (e) {
+    console.error(e);
+  }
 
+  return votes.address;
+}
 
 if (require.main === module) {
 // We recommend this pattern to be able to use async/await everywhere
 // and properly handle errors.
-  main().catch((error) => {
+  deploy().catch((error) => {
     console.error(error);
     process.exitCode = 1;
   });
 }
 
-module.exports = main;
+module.exports = deploy;
