@@ -33,12 +33,14 @@ contract Votes is ERC721, ERC721URIStorage, AccessControl {
 
     function mint(address to, string memory uri) public onlyRole(MINTER_ROLE) {
         uint256 tokenId = _tokenIdCounter.current();
+        _tokenIdCounter.increment();
         _mint(to, tokenId);
         _setTokenURI(tokenId, uri);
     }
 
     function mint(string memory uri) public onlyRole(MINTER_ROLE) {
         uint256 tokenId = _tokenIdCounter.current();
+        _tokenIdCounter.increment();
         _mint(msg.sender, tokenId);
         _setTokenURI(tokenId, uri);
     }
