@@ -1,13 +1,14 @@
 import { ethers } from "hardhat";
 import { weth, votes } from "./locations";
-
 const hre = require("hardhat");
 
 async function deploy(votesAddress?: string) {
 
+  votesAddress = votesAddress || votes;
+
   const auctionArgs = [
     weth, // address _weth,
-    votesAddress || votes, // address _votes,
+    votesAddress, // address _votes,
     '0xa98f5FE3645aE950AB92f12E3b4322bA96DC5a22', // address _treasury,
     300, // uint256 _duration,
     10000000000000, // uint256 _reservePrice,
@@ -22,6 +23,14 @@ async function deploy(votesAddress?: string) {
   console.log(
     `Auction deployed to ${auction.address}`
   );
+
+  // Give the Auction contract the MINTER_ROLE on the Votes token contract
+
+  const Votes = await ethers.getContractFactory("Votes");
+
+  const votes2 = await Votes.attach(votesAddress);
+
+  await votes2.grantRole(ethers.utils.keccak256(ethers.utils.toUtf8Bytes('MINTER_ROLE')), auction.address);
 
   try {
     await hre.run("verify:verify", {
