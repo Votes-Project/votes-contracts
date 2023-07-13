@@ -1,6 +1,6 @@
 // set the deploy network here
 
-const network = 'sepolia';
+const network = 'goerli';
 
 console.log(`${network} will be used for contract locations.`);
 
@@ -11,7 +11,7 @@ const locations = {
     "optimism": "0x4200000000000000000000000000000000000006"
   },
   "Votes": {
-    "goerli": "0xCFB2F0Bd9B3d87C0F2D43CdccbB43b5323d70F70",
+    "goerli": "0xA237b3cC022F70B45AFdbe62EdF9C12ac36932F8",
     "sepolia": "0x083b23dC187502D4f4DAc683F023D7d25E087728",
     "optimism": ""
   }

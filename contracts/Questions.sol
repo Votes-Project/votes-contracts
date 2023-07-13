@@ -23,8 +23,8 @@ contract Questions is AccessControl {
 
     // Events
 
-    event Submitted(uint256 indexed tokenId, bytes question);
-    event Edited(uint256 indexed tokenId, bytes question);
+    event QuestionSubmitted(uint256 indexed tokenId, bytes question);
+    event QuestionEdited(uint256 indexed tokenId, bytes question);
     event Locked(uint256 indexed tokenId);
     event Unlocked(uint256 indexed tokenId);
 
@@ -55,7 +55,7 @@ contract Questions is AccessControl {
             revert QUESTION_ALREADY_SUBMITTED();
         }
         tokenIDHasQuestion[tokenId] = true;
-        emit Submitted(tokenId, question);
+        emit QuestionSubmitted(tokenId, question);
     }
 
     function edit(uint256 tokenId, bytes memory question) external onlyTokenHolder(tokenId) {
@@ -65,7 +65,7 @@ contract Questions is AccessControl {
         if (locked[tokenId]){
             revert QUESTION_LOCKED_BY_REVIEWER();
         }
-        emit Edited(tokenId, question);
+        emit QuestionEdited(tokenId, question);
     }
 
     function lock(uint256 tokenId) external onlyRole(REVIEWER_ROLE){
