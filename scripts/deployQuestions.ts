@@ -6,7 +6,8 @@ const hre = require("hardhat");
 async function deploy(votesAddress?: string) {
 
   const questionsArgs = [
-    votesAddress || votes // address _votesAddress
+    votesAddress || votes, // address _votesAddress
+    5000000000000000 // uint _editFee = .005 eth
   ] as const;
 
   const Questions = await ethers.getContractFactory("Questions");
