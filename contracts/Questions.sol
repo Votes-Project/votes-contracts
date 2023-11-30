@@ -67,9 +67,9 @@ contract Questions is AccessControl {
     /// @param tokenId The tokenId of the Votes token that the question is for.
     function submit(uint256 tokenId, bytes memory questionData) external onlyTokenHolder(tokenId) {
         Question storage question = questionsByTokenId[tokenId];
-        QuestionState state  = question.state;
-        if (state == QuestionState.NOT_SUBMITTED) {
-            state = QuestionState.SUBMITTED;
+        if (question.state == QuestionState.NOT_SUBMITTED) {
+            question.state = QuestionState.SUBMITTED;
+            question.modifiedTimestamp = block.timestamp;
             emit QuestionSubmitted(tokenId, questionData);
         } else {
             revert QUESTION_ALREADY_SUBMITTED();
@@ -80,17 +80,16 @@ contract Questions is AccessControl {
     /// @param tokenId The tokenId of the Votes token attached to the question to edit.
     function edit(uint256 tokenId, bytes memory questionData) external payable onlyTokenHolder(tokenId) {
         Question storage question = questionsByTokenId[tokenId];
-        QuestionState state  = question.state;
         if (msg.value < editFee) {
             revert INSUFFICIENT_FEE_FOR_EDIT();
-        } else if (state == QuestionState.NOT_SUBMITTED) {
+        } else if (question.state == QuestionState.NOT_SUBMITTED) {
             revert QUESTION_NOT_SUBMITTED();
-        } else if (state == QuestionState.USED) {
+        } else if (question.state == QuestionState.USED) {
             revert QUESTION_ALREADY_USED();
         } else { // Ok to edit
-            state = QuestionState.SUBMITTED;
-            emit QuestionEdited(tokenId, questionData);
+            question.state = QuestionState.SUBMITTED;
             question.modifiedTimestamp = block.timestamp;
+            emit QuestionEdited(tokenId, questionData);
         }
     }
 
@@ -108,13 +107,12 @@ contract Questions is AccessControl {
     /// @param tokenId The tokenId of the Votes token attached to the question to flag.
     function flag(uint256 tokenId) external onlyRole(REVIEWER_ROLE) {
         Question storage question = questionsByTokenId[tokenId];
-        QuestionState state  = question.state;
-        if (state == QuestionState.NOT_SUBMITTED) {
+        if (question.state == QuestionState.NOT_SUBMITTED) {
             revert QUESTION_NOT_SUBMITTED();
-        } else if (state == QuestionState.USED) {
+        } else if (question.state == QuestionState.USED) {
             revert QUESTION_ALREADY_USED();
         }
-        state = QuestionState.FLAGGED;
+        question.state = QuestionState.FLAGGED;
         emit QuestionFlagged(tokenId);
     }
 
@@ -123,11 +121,10 @@ contract Questions is AccessControl {
     /// @param tokenId The tokenId of the Votes token attached to the question to use.
     function use(uint256 tokenId) external onlyRole(REVIEWER_ROLE) {
         Question storage question = questionsByTokenId[tokenId];
-        QuestionState state  = question.state;
-        if (state != QuestionState.APPROVED){
+        if (question.state != QuestionState.APPROVED){
             approve(tokenId);
         }
-        state = QuestionState.USED;
+        question.state = QuestionState.USED;
         emit QuestionUsed(tokenId);
     }
 
@@ -135,17 +132,16 @@ contract Questions is AccessControl {
     /// @param tokenId The tokenId of the Votes token attached to the question to approve.
     function approve(uint256 tokenId) public {
         Question storage question = questionsByTokenId[tokenId];
-        QuestionState state  = question.state;
-        if(block.timestamp > question.modifiedTimestamp + 1 days && state == QuestionState.SUBMITTED){
-            state = QuestionState.APPROVED;
+        if(block.timestamp > question.modifiedTimestamp + 1 days && question.state == QuestionState.SUBMITTED){
+            question.state = QuestionState.APPROVED;
             emit QuestionApproved(tokenId);
-        } else if (state == QuestionState.APPROVED) {
+        } else if (question.state == QuestionState.APPROVED) {
             revert QUESTION_ALREADY_APPROVED();
-        } else if (state == QuestionState.FLAGGED) {
+        } else if (question.state == QuestionState.FLAGGED) {
             revert QUESTION_FLAGGED_AND_MUST_BE_EDITED();
-        } else if (state == QuestionState.NOT_SUBMITTED) {
+        } else if (question.state == QuestionState.NOT_SUBMITTED) {
             revert QUESTION_NOT_SUBMITTED();
-        } else if (state == QuestionState.USED) {
+        } else if (question.state == QuestionState.USED) {
             revert QUESTION_ALREADY_USED();
         } else if(block.timestamp <= question.modifiedTimestamp + 1 days){
             revert WAIT_TIME_NOT_REACHED();
