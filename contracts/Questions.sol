@@ -34,6 +34,7 @@ contract Questions is AccessControl {
     event QuestionApproved(uint256 indexed tokenId);
     event QuestionUsed(uint256 indexed tokenId);
     event QuestionFlagged(uint256 indexed tokenId);
+    event EditFeeSet(uint256 editFee)
 
     // Errors
 
@@ -95,6 +96,7 @@ contract Questions is AccessControl {
 
     function setEditFee(uint256 fee) external onlyRole(REVIEWER_ROLE){
         editFee = fee;
+        emit EditFeeSet(fee);
     }
 
     function transferFees(address destination) external onlyRole(REVIEWER_ROLE) {
